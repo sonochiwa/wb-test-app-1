@@ -2,11 +2,8 @@ package handler
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
-	"slices"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -14,13 +11,14 @@ import (
 	"github.com/sonochiwa/wb-test-app/internal/global"
 	"github.com/sonochiwa/wb-test-app/internal/schemas"
 	"github.com/sonochiwa/wb-test-app/internal/service"
+	"github.com/sonochiwa/wb-test-app/internal/utils"
 )
 
 func InitRoutes() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 
-	r.Post("/numbers-sets", sendNumbersSetHandler)
+	r.Post("/process-numbers", sendNumbersSetHandler)
 
 	return r
 }
@@ -29,15 +27,17 @@ func sendNumbersSetHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var request schemas.NumbersSetRequestSchema
 
+	// Парсим тело запроса и проверяем на валидность
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	numbers := convertIntArrToString(request.Numbers)
+	// Преобразуем массив чисел в строку для использования в качестве ключа в хранилище
+	numbers := utils.ConvertIntArrToString(request.Numbers)
 
-	// Если в хранилище уже есть результат для полученного набора чисел,
-	// то мы просто вернем его и завершим выполнение функции
+	// Если в хранилище уже есть результат для ключа numbers, то возвращаем этот результат клиенту
+	// иначе отправляемся обрабатывать данные запроса
 	if value, ok := global.Storage[numbers]; ok {
 		if err := json.NewEncoder(w).Encode(value); err != nil {
 			log.Println(err)
@@ -45,41 +45,28 @@ func sendNumbersSetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Канал для сигнала, если данные успеют обработаться за отведенное время
 	done := make(chan struct{})
 	go func() {
-		// Отправляем request на обработку
-		if err := service.ProcessNumbers(request, numbers); err != nil {
-			log.Println(err)
-		}
-		// После успешной обработки сигнализируем об этом в канал
+		// Обрабатываем данные запроса
+		service.ProcessNumbers(request, numbers)
+
+		// После успешной обработки сигнализируем об этом в канал done
 		done <- struct{}{}
 	}()
 
+	var response any // Ответ, который отправим клиенту
+
 	select {
 	case <-done: // Обработка данных завершена успешно
-		result := global.Storage[numbers]
-		if err := json.NewEncoder(w).Encode(result); err != nil {
-			log.Println(err)
-		}
-		return
+		response = global.Storage[numbers]
+		break
 	case <-time.After(2 * time.Second): // Если время вышло, и нужно давать клиенту ответ
-		if err := json.NewEncoder(w).Encode(map[string]string{
-			"message": "Не все данные успели обработаться, попробуйте запросить их позже"},
-		); err != nil {
-			log.Println(err)
-		}
+		response = map[string]string{"message": "Не все данные успели обработаться, попробуйте запросить их позже"}
+		break
 	}
-}
 
-// convertIntArrToString - функция, которая преобразует массив чисел в строку
-func convertIntArrToString(numbers []int) string {
-	// Сортируем массив чисел, чтобы для одинакового множества независимо от
-	// порядка значений всегда генерировалась одинаковая строка
-	slices.Sort(numbers)
-
-	// Преобразуем []int в string
-	result := strings.Trim(strings.Join(strings.Fields(fmt.Sprint(numbers)), " "), "")
-
-	return result
+	// Формируем HTTP-ответ
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Println(err)
+	}
 }

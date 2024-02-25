@@ -1,20 +1,23 @@
 package service
 
 import (
-	"fmt"
-	"math/rand"
+	"log"
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/sonochiwa/wb-test-app/internal/global"
 	"github.com/sonochiwa/wb-test-app/internal/schemas"
+	"github.com/sonochiwa/wb-test-app/internal/utils"
 )
 
-func ProcessNumbers(request schemas.NumbersSetRequestSchema, numbers string) error {
+func ProcessNumbers(request schemas.NumbersSetRequestSchema, numbers string) {
 	var results = make(map[string]int)
 	var wg sync.WaitGroup
+
 	mutex := sync.Mutex{}
+
+	// Для каждого числа из запроса создаем отдельную goroutine,
+	// которая будет выполнять долгую операцию
 
 	for _, num := range request.Numbers {
 		wg.Add(1)
@@ -22,30 +25,24 @@ func ProcessNumbers(request schemas.NumbersSetRequestSchema, numbers string) err
 		go func(num int) {
 			defer wg.Done()
 
-			result, err := getResult(int64(num))
+			// Выполняем долгую операцию
+			result, err := utils.GetResult(int64(num))
+			if err != nil {
+				mutex.Lock()
+				defer mutex.Unlock()
+				results[strconv.Itoa(num)] = -1 // Если произошла ошибка, записываем -1
+
+				log.Println("Не удалось вычислить значение для числа ", num)
+			}
 
 			mutex.Lock()
 			defer mutex.Unlock()
-
-			if err == nil {
-				results[strconv.Itoa(num)] = int(result)
-			} else {
-				fmt.Printf("Error calculating result for %v: %v\n", num, err)
-			}
+			results[strconv.Itoa(num)] = int(result) // Записываем результат в общий словарь
 		}(num)
 	}
 
-	wg.Wait() // Ожидаем завершения всех горутин
+	wg.Wait() // Ожидаем завершения всех goroutine
+
+	// Записываем результат в хранилище
 	global.Storage[numbers] = schemas.NumbersSetResponseSchema{Results: results}
-
-	return nil
-}
-
-// getResult - функция, которая может выполняться достаточно долгое время
-func getResult(x int64) (int64, error) {
-	// Ожидание случайного времени (от 2 до 12 секунд)
-	time.Sleep(time.Duration(rand.Intn(2)+2) * time.Second)
-
-	// Выход = вход * вход, ошибка пустая
-	return x * x, nil
 }
