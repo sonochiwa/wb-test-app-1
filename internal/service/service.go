@@ -18,7 +18,6 @@ func ProcessNumbers(request schemas.NumbersSetRequestSchema, numbers string) {
 
 	// Для каждого числа из запроса создаем отдельную goroutine,
 	// которая будет выполнять долгую операцию
-
 	for _, num := range request.Numbers {
 		wg.Add(1)
 
@@ -28,21 +27,21 @@ func ProcessNumbers(request schemas.NumbersSetRequestSchema, numbers string) {
 			// Выполняем долгую операцию
 			result, err := utils.GetResult(int64(num))
 			if err != nil {
-				mutex.Lock()
-				defer mutex.Unlock()
-				results[strconv.Itoa(num)] = -1 // Если произошла ошибка, записываем -1
-
 				log.Println("Не удалось вычислить значение для числа ", num)
+				return
 			}
 
 			mutex.Lock()
-			defer mutex.Unlock()
 			results[strconv.Itoa(num)] = int(result) // Записываем результат в общий словарь
+			mutex.Unlock()
 		}(num)
 	}
 
-	wg.Wait() // Ожидаем завершения всех goroutine
+	// Ожидаем завершения всех goroutine
+	wg.Wait()
 
 	// Записываем результат в хранилище
+	mutex.Lock()
 	global.Storage[numbers] = schemas.NumbersSetResponseSchema{Results: results}
+	mutex.Unlock()
 }

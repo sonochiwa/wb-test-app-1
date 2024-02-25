@@ -28,6 +28,17 @@ func sendNumbersSetHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var request schemas.NumbersSetRequestSchema
 
+	// Обрабатываем параметр timeout из HTTP запроса
+	timeout := time.Duration(2) // По дефолту 2
+	if r.URL.Query().Get("timeout") != "" {
+		val, err := strconv.Atoi(r.URL.Query().Get("timeout"))
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		timeout = time.Duration(val)
+	}
+
 	// Парсим тело запроса и проверяем на валидность
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -56,17 +67,6 @@ func sendNumbersSetHandler(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	var response any // Ответ, который отправим клиенту
-
-	// Принимаем параметр timeout из запроса
-	timeout := time.Duration(2)
-	if r.URL.Query().Get("timeout") != "" {
-		val, err := strconv.Atoi(r.URL.Query().Get("timeout"))
-		if err != nil {
-			log.Println(err)
-			return
-		}
-		timeout = time.Duration(val)
-	}
 
 	select {
 	case <-done: // Обработка данных завершена успешно
