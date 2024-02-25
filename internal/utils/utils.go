@@ -24,7 +24,7 @@ func ConvertIntArrToString(numbers []int) string {
 func GetResult(x int64) (int64, error) {
 	// Ожидание случайного времени (от 1 до 6 секунд)
 
-	// Имитируем выполнение тяжелой задачи длительностью от 1 до 6 секунд
+	// Имитируем выполнение тяжелой задачи длительностью от 1 до 5 секунд
 	time.Sleep(time.Duration(rand.Intn(5)+1) * time.Second)
 
 	// Выход = вход * вход, ошибка пустая
