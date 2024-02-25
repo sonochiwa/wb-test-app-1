@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -56,11 +57,22 @@ func sendNumbersSetHandler(w http.ResponseWriter, r *http.Request) {
 
 	var response any // Ответ, который отправим клиенту
 
+	// Принимаем параметр timeout из запроса
+	timeout := time.Duration(2)
+	if r.URL.Query().Get("timeout") != "" {
+		val, err := strconv.Atoi(r.URL.Query().Get("timeout"))
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		timeout = time.Duration(val)
+	}
+
 	select {
 	case <-done: // Обработка данных завершена успешно
 		response = global.Storage[numbers]
 		break
-	case <-time.After(2 * time.Second): // Если время вышло, и нужно давать клиенту ответ
+	case <-time.After(timeout * time.Second): // Если время вышло, и нужно давать клиенту ответ
 		response = map[string]string{"message": "Не все данные успели обработаться, попробуйте запросить их позже"}
 		break
 	}

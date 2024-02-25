@@ -3,7 +3,8 @@
 Для запуска приложения необходимо выполнить команду:
 
 ```bash
-go run cmd/main.go
+go build -o ./bin cmd/main.go
+go run bin/main.go
 ```
 
 # Описание
