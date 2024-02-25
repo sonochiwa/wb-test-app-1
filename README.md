@@ -1,10 +1,10 @@
-# Запуск
+# Сборка и запуск
 
 Для запуска приложения необходимо выполнить команду:
 
 ```bash
-go build -o ./bin cmd/main.go
-go run bin/main.go
+go build -o build/main cmd/main.go
+./build/main
 ```
 
 # Описание
