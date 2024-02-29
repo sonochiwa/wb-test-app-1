@@ -1,9 +1,11 @@
 package schemas
 
-type NumbersSetRequestSchema struct {
+type NumbersSetRequest struct {
 	Numbers []int `json:"numbers"`
 }
 
-type NumbersSetResponseSchema struct {
+type NumbersSetResponse struct {
 	Results map[string]int `json:"results"`
+	Details string         `json:"details,omitempty"`
+	//Done    bool           `json:"-"`
 }
