@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"log"
 	"strconv"
 	"sync"
@@ -10,38 +11,62 @@ import (
 	"github.com/sonochiwa/wb-test-app/internal/utils"
 )
 
-func ProcessNumbers(request schemas.NumbersSetRequestSchema, numbers string) {
-	var results = make(map[string]int)
-	var wg sync.WaitGroup
+func ProcessNumbers(ctx context.Context, request schemas.NumbersSetRequest, responseCh chan<- schemas.NumbersSetResponse) {
+	var response schemas.NumbersSetResponse
+	var mu sync.RWMutex
 
-	mutex := sync.Mutex{}
+	resultsCh := make(chan map[string]int)
 
-	// Для каждого числа из запроса создаем отдельную goroutine,
-	// которая будет выполнять долгую операцию
-	for _, num := range request.Numbers {
-		wg.Add(1)
+	// Преобразуем массив чисел в уникальное множество
+	numbersSet := utils.RemoveDuplicates(request.Numbers)
 
+	// Преобразуем массив чисел в строку для использования в качестве ключа в хранилище
+	numbers := utils.ConvertIntArrToString(numbersSet)
+
+	// Если в хранилище уже есть результат, то возвращаем этот результат клиенту
+	if value, ok := global.Storage[numbers]; ok {
+		if len(global.Storage[numbers].Results) == len(numbersSet) {
+			responseCh <- schemas.NumbersSetResponse{Results: value.Results}
+		}
+	} else {
+		// Инициализируем пустой map
+		mu.Lock()
+		global.Storage[numbers] = schemas.NumbersSetResponse{Results: map[string]int{}}
+		mu.Unlock()
+	}
+
+	// Для каждого числа из запроса создаем отдельную goroutine
+	for _, num := range numbersSet {
 		go func(num int) {
-			defer wg.Done()
-
-			// Выполняем долгую операцию
-			result, err := utils.GetResult(int64(num))
+			result, err := utils.GetResult(int64(num)) // Выполняем долгую операцию
 			if err != nil {
 				log.Println("Не удалось вычислить значение для числа ", num)
 				return
 			}
-
-			mutex.Lock()
-			results[strconv.Itoa(num)] = int(result) // Записываем результат в общий словарь
-			mutex.Unlock()
+			resultsCh <- map[string]int{strconv.Itoa(num): int(result)} // Отправляем результат в канал
 		}(num)
 	}
 
-	// Ожидаем завершения всех goroutine
-	wg.Wait()
+	go func() {
+		// Сбор результатов из канала
+		for range numbersSet {
+			for k, v := range <-resultsCh {
+				mu.Lock()
+				global.Storage[numbers].Results[k] = v
+				mu.Unlock()
+			}
+		}
+		responseCh <- global.Storage[numbers] // Отправляем результат в канал ответа
+	}()
 
-	// Записываем результат в хранилище
-	mutex.Lock()
-	global.Storage[numbers] = schemas.NumbersSetResponseSchema{Results: results}
-	mutex.Unlock()
+	<-ctx.Done()
+	response = schemas.NumbersSetResponse{
+		Results: global.Storage[numbers].Results,
+	}
+
+	if len(response.Results) < len(numbersSet) {
+		response.Details = "Не все данные успели обработаться, попробуйте запросить их позже"
+	}
+
+	responseCh <- response
 }
