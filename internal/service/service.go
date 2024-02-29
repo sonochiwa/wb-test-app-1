@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"strconv"
-	"sync"
 
 	"github.com/sonochiwa/wb-test-app/internal/global"
 	"github.com/sonochiwa/wb-test-app/internal/schemas"
@@ -13,7 +12,6 @@ import (
 
 func ProcessNumbers(ctx context.Context, request schemas.NumbersSetRequest, responseCh chan<- schemas.NumbersSetResponse) {
 	var response schemas.NumbersSetResponse
-	var mu sync.RWMutex
 
 	resultsCh := make(chan map[string]int)
 
@@ -24,15 +22,13 @@ func ProcessNumbers(ctx context.Context, request schemas.NumbersSetRequest, resp
 	numbers := utils.ConvertIntArrToString(numbersSet)
 
 	// Если в хранилище уже есть результат, то возвращаем этот результат клиенту
-	if value, ok := global.Storage[numbers]; ok {
-		if len(global.Storage[numbers].Results) == len(numbersSet) {
-			responseCh <- schemas.NumbersSetResponse{Results: value.Results}
+	if data, ok := global.Storage.Get(numbers); ok {
+		if len(data.Results) == len(numbersSet) {
+			responseCh <- schemas.NumbersSetResponse{Results: data.Results}
 		}
 	} else {
 		// Инициализируем пустой map
-		mu.Lock()
-		global.Storage[numbers] = schemas.NumbersSetResponse{Results: map[string]int{}}
-		mu.Unlock()
+		data.Results = map[string]int{}
 	}
 
 	// Для каждого числа из запроса создаем отдельную goroutine
@@ -51,20 +47,22 @@ func ProcessNumbers(ctx context.Context, request schemas.NumbersSetRequest, resp
 		// Сбор результатов из канала
 		for range numbersSet {
 			for k, v := range <-resultsCh {
-				mu.Lock()
-				global.Storage[numbers].Results[k] = v
-				mu.Unlock()
+				data, _ := global.Storage.Get(numbers)
+				data.Results[k] = v
+				global.Storage.Set(numbers, data)
 			}
 		}
-		responseCh <- global.Storage[numbers] // Отправляем результат в канал ответа
+		data, _ := global.Storage.Get(numbers)
+		responseCh <- data // Отправляем результат в канал ответа
 	}()
 
 	<-ctx.Done()
+	data, _ := global.Storage.Get(numbers)
 	response = schemas.NumbersSetResponse{
-		Results: global.Storage[numbers].Results,
+		Results: data.Results,
 	}
 
-	if len(response.Results) < len(numbersSet) {
+	if len(data.Results) < len(numbersSet) {
 		response.Details = "Не все данные успели обработаться, попробуйте запросить их позже"
 	}
 

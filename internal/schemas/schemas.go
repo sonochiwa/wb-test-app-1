@@ -7,5 +7,4 @@ type NumbersSetRequest struct {
 type NumbersSetResponse struct {
 	Results map[string]int `json:"results"`
 	Details string         `json:"details,omitempty"`
-	//Done    bool           `json:"-"`
 }

@@ -1,12 +1,43 @@
 package global
 
-import "github.com/sonochiwa/wb-test-app/internal/schemas"
+import (
+	"sync"
 
-// Storage - объявление глобальной переменной для хранения данных,
-// чтобы избежать необходимости добавления работы с БД в тестовом задании
-var Storage map[string]schemas.NumbersSetResponse
+	"github.com/sonochiwa/wb-test-app/internal/schemas"
+)
+
+type Store struct {
+	data map[string]schemas.NumbersSetResponse
+	mu   sync.RWMutex
+}
+
+// NewStore - конструктор для store
+func NewStore() *Store {
+	return &Store{
+		data: make(map[string]schemas.NumbersSetResponse),
+	}
+}
+
+func (s *Store) Get(key string) (value schemas.NumbersSetResponse, ok bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	value, ok = s.data[key]
+	if !ok {
+		return schemas.NumbersSetResponse{Results: map[string]int{}}, ok
+	}
+	return value, ok
+}
+
+func (s *Store) Set(key string, value schemas.NumbersSetResponse) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data[key] = value
+}
+
+// Storage - замена базы данных
+var Storage *Store
 
 func init() {
 	// Инициализация хранилища
-	Storage = make(map[string]schemas.NumbersSetResponse)
+	Storage = NewStore()
 }
