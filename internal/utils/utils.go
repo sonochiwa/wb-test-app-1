@@ -8,6 +8,22 @@ import (
 	"time"
 )
 
+// RemoveDuplicates - функция, которая убирает дубликаты из массива
+func RemoveDuplicates(numbers []int) []int {
+	encountered := map[int]bool{}
+	var result []int
+
+	for v := range numbers {
+		if encountered[numbers[v]] == true {
+		} else {
+			encountered[numbers[v]] = true
+			result = append(result, numbers[v])
+		}
+	}
+
+	return result
+}
+
 // ConvertIntArrToString - функция, которая преобразует массив чисел в строку
 func ConvertIntArrToString(numbers []int) string {
 	// Сортируем массив чисел, чтобы для одинакового множества независимо от
