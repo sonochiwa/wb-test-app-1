@@ -12,13 +12,9 @@ import (
 
 func ProcessNumbers(ctx context.Context, request schemas.NumbersSetRequest, responseCh chan<- schemas.NumbersSetResponse) {
 	var response schemas.NumbersSetResponse
-
 	resultsCh := make(chan map[string]int)
 
-	// Преобразуем массив чисел в уникальное множество
 	numbersSet := utils.RemoveDuplicates(request.Numbers)
-
-	// Преобразуем массив чисел в строку для использования в качестве ключа в хранилище
 	numbers := utils.ConvertIntArrToString(numbersSet)
 
 	// Если в хранилище уже есть результат, то возвращаем этот результат клиенту
@@ -26,9 +22,6 @@ func ProcessNumbers(ctx context.Context, request schemas.NumbersSetRequest, resp
 		if len(data.Results) == len(numbersSet) {
 			responseCh <- schemas.NumbersSetResponse{Results: data.Results}
 		}
-	} else {
-		// Инициализируем пустой map
-		data.Results = map[string]int{}
 	}
 
 	// Для каждого числа из запроса создаем отдельную goroutine
@@ -44,7 +37,6 @@ func ProcessNumbers(ctx context.Context, request schemas.NumbersSetRequest, resp
 	}
 
 	go func() {
-		// Сбор результатов из канала
 		for range numbersSet {
 			for k, v := range <-resultsCh {
 				data, _ := global.Storage.Get(numbers)
@@ -53,7 +45,7 @@ func ProcessNumbers(ctx context.Context, request schemas.NumbersSetRequest, resp
 			}
 		}
 		data, _ := global.Storage.Get(numbers)
-		responseCh <- data // Отправляем результат в канал ответа
+		responseCh <- data
 	}()
 
 	<-ctx.Done()
